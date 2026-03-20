@@ -6,6 +6,9 @@ fn pause_terminal() {
                 let mut temp = String::new();
                 io::stdin().read_line(&mut temp).unwrap();
 }
+fn clear_screen() {
+        let _ = Command::new("clear").status();
+}
 fn enter_choice() -> i32{
         println!("       ---------ONEPLUS 15 升降級工具 (Rust版)---------");
         println!("\x1b[1;31m====================================================");
@@ -77,7 +80,6 @@ fn boot_to_bootloader() {
         // .args([...]) 可以直接傳入一個陣列，比拼接字串直覺太多了！
         let _ = Command::new("adb").args(["reboot", "bootloader"]).status();
         let _ = Command::new("fastboot").args(["reboot", "bootloader"]).status();
-        
         println!("指令發送完畢。\n");
 }
 fn boot_to_recovery() {
@@ -130,6 +132,56 @@ fn clear_images() {
                 println!("images 資料夾不存在，已自動建立。");
         }
 }
+
+fn unpack() {
+        let ota = Path::new("ota");
+        let images = Path::new("images");
+        let  zip = Path::new("ota/update.zip");
+        let bin = Path::new("ota/payload.bin");
+        if !zip.exists() {
+                println!("ERROR:系統找不到 /ota/update.zip ");
+                println!("請確認是否已將檔案改名為update.zip並放入ota資料夾下 ");
+                pause_terminal();
+                return;
+        }
+        let zip_result = Command::new("7z")
+                .arg("x")
+                .arg(zip)
+                .arg("payload.bin")
+                .arg(format!("-o{}",ota.display()))
+                .status()
+                .expect("❌ 呼叫 7z 失敗，請確認是否安裝 p7zip");
+        if zip_result.success() {
+                println!("解壓縮update.zip成功");
+                println!("按任意鍵繼續提取payload.bin....");
+                pause_terminal();
+        }
+        else {
+                println!("ERROR: 解壓縮失敗，請確認 update.zip 是否損壞。");
+                pause_terminal();
+                clear_screen();
+                return;
+        }
+        if !bin.exists() {
+                println!("提取payload.bin失敗");
+                println!("確認檔案是否存在");
+                pause_terminal();
+                clear_screen();
+                return;
+        }
+        println!("開始解包payload.bin");
+        println!();
+        let bin_result = Command::new("payload-dumper-go")
+        .arg("-o")
+        .arg(images)
+        .arg(bin)
+        .status()
+        .expect("執行 payload-dumper-go 失敗，請確認已安裝");
+        if bin_result.success() {
+                println!("解包payload.bin成功");
+        }
+        pause_terminal();
+}
 fn main() {
         let _ = fs::create_dir_all("images");
         let _ = fs::create_dir_all("tools");
@@ -139,7 +191,7 @@ fn main() {
                 match choice {
                         1 => println!("執行：一鍵安裝驅動..."),
                         2 => environment(),
-                        3 => println!("執行：解包全量包..."),
+                        3 => unpack(),
                         4 => clear_ota(),
                         5 => clear_images(),
                         6 => println!("執行：開始刷機..."),
